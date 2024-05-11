@@ -19,6 +19,8 @@ Díky integrované RFID čtečce s anténou je také možné sledovat obsah kaž
 Projekt Shopping Cart Tracker nabízí možnosti prevence krádeží nákupních vozíků, optimalizace nákupního procesu a zlepšení zákaznického servisu. 
 S sledováním polohy vozíků a jejich obsahu může pomoci chránit majetek obchodů, zefektivnit uspořádání zboží a personální rozvrh a poskytnout cenné analýzy o chování zákazníků, což může vést k lepšímu cílení marketingových kampaní a strategickému plánování prodeje.
 
+### [Myšlenková mapa](http://go.bubbl.us/e1e125/e009?/ESP32-DEV-MODULE).
+
 
 Autoři: Lukáš Drápela, Adrian Biskup
 
@@ -42,6 +44,8 @@ Additionally, with the integrated RFID reader and antenna, it is possible to tra
 ## Utilization
 The Shopping Cart Tracker project offers options for preventing cart theft, optimizing the shopping process, and improving customer service. 
 By tracking cart locations and contents, it can help protect store assets, streamline merchandise arrangement and staff scheduling, and provide valuable insights into customer behavior, potentially leading to better-targeted marketing campaigns and strategic sales planning.
+
+### [Mind map](http://go.bubbl.us/e1e125/e009?/ESP32-DEV-MODULE).
 
 
 Authors: Lukáš Drápela, Adrian Biskup
