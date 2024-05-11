@@ -1,0 +1,224 @@
+#include <Arduino.h>
+
+#if defined(ESP32)
+#include <WiFi.h>
+#elif defined(ESP8266)
+#include <ESP8266WiFi.h>
+#endif
+
+#include <Firebase_ESP_Client.h>
+#include "addons/TokenHelper.h"
+#include "addons/RTDBHelper.h"
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+
+// Insert your network credentials
+#define WIFI_SSID "REPLACE_WITH_YOUR_SSID"
+#define WIFI_PASSWORD "REPLACE_WITH_YOUR_PASSWORD"
+
+// Insert Firebase project API Key
+#define API_KEY "REPLACE_WITH_YOUR_FIREBASE_PROJECT_API_KEY"
+
+// Insert RTDB URL
+#define DATABASE_URL "REPLACE_WITH_YOUR_FIREBASE_DATABASE_URL"
+
+// Define Firebase Data object
+FirebaseData fbdo;
+FirebaseAuth auth;
+FirebaseConfig config;
+
+unsigned long sendDataPrevMillis = 0;
+int count = 0;
+bool signupOK = false;
+
+// HTML code
+const char html[] PROGMEM = R"=====(
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Coordinates Map</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #ffffff;
+            text-align: center;
+        }
+        #map {
+            width: 100%;
+            height: 80vh; /* Adjust height as needed */
+            margin-top: 20px;
+        }
+        #search {
+            width: 300px;
+            margin: 20px auto;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <input type="text" id="search" placeholder="Enter coordinates (latitude, longitude)">
+    <button id="generate">Generate Random Coordinates</button>
+    <button id="changeBg">Change Background Color</button>
+    <div id="map"></div>
+
+    <script>
+        function initMap() {
+            var initialPosition = {lat: 49.834397239026686, lng: 18.26328373159097}; // Initial position (Lidl, U Stadionu, Ostrava)
+
+            var map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 20,
+                center: initialPosition // Center the map on initial position
+            });
+
+            var marker = null; // Reference to the marker on the map
+
+            // Function to update cart positions on the map
+            function updateCartPositions() {
+                // If marker exists, remove it from the map
+                if (marker !== null) {
+                    marker.setMap(null);
+                }
+
+                // Here you would implement code to get cart positions from the database
+                // For example, via AJAX request to the server
+
+                // Assume cart positions data is in the variable "cartPositions"
+                var cartPositions = [
+                    {lat: 50.0755, lng: 14.4378}, // Example cart position 1
+                    {lat: 50.0789, lng: 14.4426}, // Example cart position 2
+                    // More cart positions ...
+                ];
+
+                // Choose the first position from cartPositions
+                var selectedPosition = cartPositions[0];
+
+                // Create a new marker on the map
+                marker = new google.maps.Marker({
+                    position: selectedPosition,
+                    map: map
+                });
+
+                // Center the map on the new marker position
+                map.setCenter(selectedPosition);
+            }
+
+            // Update cart positions every 30 seconds
+            setInterval(function() {
+                updateCartPositions();
+            }, 30000); // 30 seconds
+
+            // Add event listener for the search input field
+            document.getElementById('search').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    var coordinates = this.value.split(',');
+                    var lat = parseFloat(coordinates[0]);
+                    var lng = parseFloat(coordinates[1]);
+                    if (!isNaN(lat) && !isNaN(lng)) {
+                        map.setCenter({lat: lat, lng: lng});
+                        marker = new google.maps.Marker({
+                            position: {lat: lat, lng: lng},
+                            map: map
+                        });
+                    }
+                }
+            });
+
+            // Set a specific position for the marker upon clicking the button
+            document.getElementById('generate').addEventListener('click', function() {
+                // Reference point for the square (Ostrava, U Stadionu)
+                var referenceLat = 49.834397239026686;
+                var referenceLng = 18.26328373159097;
+
+                // Generate random coordinates within the 300x300 meter square
+                var lat = referenceLat + (Math.random() * 0.0025) - 0.00125; // 0.0025 degrees ≈ 275 meters
+                var lng = referenceLng + (Math.random() * 0.0025) - 0.00125; // 0.00125 degrees ≈ 137.5 meters
+
+                var specificPosition = {lat: lat, lng: lng};
+
+                marker = new google.maps.Marker({
+                    position: specificPosition,
+                    map: map
+                });
+                map.setCenter(specificPosition);
+            });
+
+            // Change background color to black
+            document.getElementById('changeBg').addEventListener('click', function() {
+                var currentColor = document.body.style.backgroundColor;
+                if (currentColor === 'rgb(255, 255, 255)' || currentColor === '#ffffff') {
+                    document.body.style.backgroundColor = '#000000';
+                    // Save the background color to local storage
+                    localStorage.setItem('backgroundColor', '#000000');
+                } else {
+                    document.body.style.backgroundColor = '#ffffff';
+                    // Save the background color to local storage
+                    localStorage.setItem('backgroundColor', '#ffffff');
+                }
+            });
+
+            // Retrieve background color from local storage on page load
+            var savedColor = localStorage.getItem('backgroundColor');
+            if (savedColor) {
+                document.body.style.backgroundColor = savedColor;
+            }
+        }
+
+        // Automatically reload the page every 10 seconds
+        setInterval(function() {
+            location.reload();
+        }, 10000); // 10 seconds
+    </script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&callback=initMap" async defer></script>
+</body>
+</html>
+)=====";
+
+AsyncWebServer server(80); // Port 80 for HTTP
+
+void setup() {
+  Serial.begin(115200);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.print("Connecting to Wi-Fi");
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(300);
+  }
+  Serial.println();
+  Serial.print("Connected with IP: ");
+  Serial.println(WiFi.localIP());
+  Serial.println();
+
+  /* Assign the api key (required) */
+  config.api_key = API_KEY;
+
+  /* Assign the RTDB URL (required) */
+  config.database_url = DATABASE_URL;
+
+  /* Sign up */
+  if (Firebase.signUp(&config, &auth, "", "")) {
+    Serial.println("ok");
+    signupOK = true;
+  } else {
+    Serial.printf("%s\n", config.signer.signupError.message.c_str());
+  }
+
+  /* Assign the callback function for the long running token generation task */
+  config.token_status_callback = tokenStatusCallback; // see addons/TokenHelper.h
+
+  Firebase.begin(&config, &auth);
+  Firebase.reconnectWiFi(true);
+
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send_P(200, "text/html", html); // Send HTML page
+  });
+
+  server.begin(); // Start server
+}
+
+void loop() {
+  delay(1000); // Delay to avoid unnecessary CPU load
+}
