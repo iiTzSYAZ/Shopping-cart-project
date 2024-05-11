@@ -1,7 +1,7 @@
 # Shopping-cart-project
 
 # CZECH
-----
+
 ## Projekt Shopping Cart Tracker
 Projekt Shopping Cart Tracker je inovativním řešením pro sledování pohybu nákupních vozíků v obchodních prostorech. 
 Využívá moderní technologie, jako je ESP32 mikrokontrolér, databáze Firebase, Node.js, GPS modul NEO-6M a RFID čtečka s anténou, aby poskytl efektivní a uživatelsky přívětivé řešení pro sledování a optimalizaci nákupního procesu.
